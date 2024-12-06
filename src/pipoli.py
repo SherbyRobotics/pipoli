@@ -1,9 +1,11 @@
 import numpy as np
 from gymnasium import Env
 from gymnasium.spaces import Box
-from stable_baselines import A2C, DDPG, PPO, SAC, TD3
+from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3
 
 from typing import Callable
+
+from VI_wrapper import VI
 
 
 class Context:
@@ -44,9 +46,19 @@ class Context:
     def to_adim_act(self, act: np.ndarray) -> np.ndarray:
         """Converts a dimensional action to a non dimensional one."""
         return act * self.act_transform(self.base_vars)
+    
+    def save(self, path: str):
+        np.save(path + '.npy', self.base_vars)
+
+    def compare(self, other: "Context") -> bool:
+        return np.linalg.norm(self.base_vars - other.base_vars)
+    
+    def adim_compare(self, other: "Context") -> bool:
+        # return the angle between the two vectors
+        return np.arccos(np.dot(self.base_vars, other.base_vars) / (np.linalg.norm(self.base_vars) * np.linalg.norm(other.base_vars)))
 
 
-Policy = A2C | DDPG | PPO | SAC | TD3
+Policy = A2C | DDPG | PPO | SAC | TD3 | VI
 
 class DimensionalPolicy:
 
@@ -90,10 +102,8 @@ class DimensionalPolicy:
         Should work 1:1 with Stable-Baselines3's predict. It does not support
         recurrent policies.
         """
-        norm_obs = self._normalize_obs(obs)
-        norm_act = self.policy.predict(norm_obs, *args, **kwargs)
-        act = self._denormalize_act(norm_act)
-        return act
+        act, norm_sta = self.policy.predict(obs, *args, **kwargs)
+        return act, norm_sta
 
     def adim_predict(self, obs_s: np.ndarray, *args, **kwargs) -> np.ndarray:
         """Predicts the adimensional action based on an adimensional observation.
@@ -101,15 +111,20 @@ class DimensionalPolicy:
         Should work with Stable-Baselines3's predict arguments. It does not
         support recurrent policies.
         """
-        obs = self.context.from_adim_obs(obs_s)
-        act = self.predict(obs, *args, **kwargs)
-        act_s = self.context.to_adim_act(act)
-        return act_s
+        obs = self.context.to_adim_obs(obs_s)
+        act, state = self.predict(obs, *args, **kwargs)
+        act_s = self.context.from_adim_act(act)
+        print(act, act_s)
+        return act_s, state
 
     def to_scaled(self, context: Context) -> "ScaledPolicy":
         """Returns a `ScaledPolicy` with new `context`."""
         scaled_pol = ScaledPolicy(self, context)
         return scaled_pol
+
+    def save_policy(self, path: str):
+        self.policy.save(path + "model")
+        self.context.save(path + "context")
 
 
 class ScaledPolicy:
@@ -134,18 +149,53 @@ class ScaledPolicy:
         recurrent policies.
         """
         obs_s = self.context.to_adim_obs(obs)
-        act_s = self.dim_pol.adim_predict(obs_s, *args, **kwargs)
+        act_s, state = self.dim_pol.adim_predict(obs_s, *args, **kwargs)
         act = self.context.from_adim_act(act_s)
-        return act
+        return act, state
 
 
 class PolicyTrainer:
 
-    def __init__(self, algo, context, env, algo_params={}):
-        pass
+    def __init__(self, algo, context, env, **algo_params):
+        self.model = algo(**algo_params)
+        self.context = context
+        self.env = env
 
-    def train(self, *args, **kwargs) -> DimensionalPolicy:
-        pass
+
+    def train(self, save=False, *args, **kwargs) -> DimensionalPolicy:
+        self.model.learn(*args, **kwargs)
+        if save:
+            self.save_policy("trained_policy")
+        return DimensionalPolicy(self.model, self.context, self.env.observation_space, self.env.action_space)
 
     def retrainer(self, policy: DimensionalPolicy, env: Env) -> "PolicyTrainer":
         pass
+
+class PolicyEvaluator:
+
+    def __init__(self, policy: DimensionalPolicy, env):
+        self.policy = policy
+        self.env = env
+        self.J = 0
+
+    def compute_score(self):
+        """Computes the score of the current timestamp (state and action)."""
+        dJ = 1.0
+        self.J += dJ
+
+    def evaluate(self, n_steps: int, render=False, **kwargs) -> float:
+        """Evaluates the policy for `n_steps` steps."""
+        obs = self.env.reset()[0]
+        self.J = 0
+        for _ in range(n_steps):
+            action, states = self.policy.predict(obs, **kwargs)
+            out = self.env.step(action)
+            if len(out) == 4:
+                obs, reward, done, info = out
+            elif len(out) == 5:
+                obs, reward, done, info, _ = out
+            self.compute_score(obs, action)
+            if render:
+                self.env.render("human")
+
+        return self.J/n_steps
