@@ -22,10 +22,10 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  numpy,
-  gymnasium,
-  pyro_udes,
-  stable_baselines3,
+  "numpy",
+  "gymnasium",
+  "pyro_udes",
+  "stable_baselines3",
 ]
 
 [project.urls]
