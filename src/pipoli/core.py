@@ -1,7 +1,7 @@
 from abc import abstractmethod, ABC
 import numpy as np
 
-from typing import Callable, override
+from typing import Callable#, override
 
 
 class Context:
@@ -23,7 +23,7 @@ class Context:
         act_transform: fn(array[n]) -> array[p]
             a function that computes the factors to non dimensionalize an action
         """
-        self.base_vars = base_vars
+        self.base_vars = np.array(base_vars)
         self.obs_transform = obs_transform
         self.act_transform = act_transform
 
@@ -81,7 +81,7 @@ class DimensionalPolicy(Policy):
     def __rshift__(self, context: Context) -> "ScaledPolicy":
         return self.to_scaled(context)
     
-    @override
+    #@override
     def action(self, obs: np.ndarray) -> np.ndarray:
         """Returns the dimensional action corresponding to the dimensional observation."""
         act = self.policy.action(obs)
@@ -90,7 +90,7 @@ class DimensionalPolicy(Policy):
     def adim_action(self, obs_s: np.ndarray) -> np.ndarray:
         """Returns the adimensional action corresponding to the adimensional observation."""
         obs = self.context.to_adim_obs(obs_s)
-        act = self.predict(obs, *args, **kwargs)
+        act = self.action(obs)
         act_s = self.context.from_adim_act(act)
         return act_s
 
@@ -119,10 +119,10 @@ class ScaledPolicy:
         self.dim_pol = dim_pol
         self.context = context
 
-    @override
+    #@override
     def action(self, obs: np.ndarray) -> np.ndarray:
         """Returns the dimensional action corresponding to the dimensional observation."""
         obs_s = self.context.to_adim_obs(obs)
-        act_s = self.dim_pol.adim_predict(obs_s, *args, **kwargs)
+        act_s = self.dim_pol.adim_action(obs_s)
         act = self.context.from_adim_act(act_s)
         return act

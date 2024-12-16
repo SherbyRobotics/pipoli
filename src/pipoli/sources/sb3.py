@@ -1,6 +1,7 @@
 from gymnasium import Env
 from gymnasium.spaces import Box
 from gymnasium.wrappers import RescaleAction, RescaleObservation
+import numpy as np
 from stable_baselines3 import A2C, DDPG, DQN, PPO, SAC, TD3
 
 from pipoli.core import Policy
@@ -45,7 +46,7 @@ class SB3Policy(Policy):
         self.env_obs_space = env_obs_space
         self.env_act_space = env_act_space
 
-        self.predict_kwargs = {} if kwargs is None else kwargs
+        self.predict_kwargs = {} if predict_kwargs is None else predict_kwargs
 
     def _env_to_model_obs(self, env_obs):
         model_low = self.model_obs_space.low
