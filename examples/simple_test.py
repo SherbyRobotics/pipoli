@@ -113,7 +113,7 @@ class Pendulum(gym.Env):
 
 
 from stable_baselines3 import PPO, SAC
-from pipoli.sources.sb3 import SB3Policy
+from pipoli.sources.sb3 import SB3Policy, SB3PolicyTrainer
 
 m = 1
 g = 9.8
@@ -127,16 +127,26 @@ train_env = gym.wrappers.RescaleObservation(train_env, -1, 1)
 
 # model = SAC("MlpPolicy", train_env, verbose=1).learn(10000)
 # model.save("model")
-model = SAC.load("sandbox/model")
+# model = SAC.load("sandbox/model")
 
-sb3_pol = SB3Policy(
-    model,
-    train_env.observation_space,
-    train_env.action_space,
-    env.observation_space,
-    env.action_space,
-    dict(deterministic=True)
+# sb3_pol = SB3Policy(
+#     model,
+#     train_env.observation_space,
+#     train_env.action_space,
+#     env.observation_space,
+#     env.action_space,
+#     dict(deterministic=True)
+# )
+
+trainer = SB3PolicyTrainer(
+    PPO,
+    Pendulum,
+    model_obs_space=None,#train_env.observation_space,
+    model_act_space=None,#train_env.action_space,
+    env_params=dict(m=m, g=g, l=l, taumax=taumax, tf=tf)
 )
+
+sb3_pol = trainer.train(1000)
 
 from pipoli.core import DimensionalPolicy, Context
 
