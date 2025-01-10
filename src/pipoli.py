@@ -55,7 +55,10 @@ class Context:
     
     def adim_compare(self, other: "Context") -> bool:
         # return the angle between the two vectors
-        return np.arccos(np.dot(self.base_vars, other.base_vars) / (np.linalg.norm(self.base_vars) * np.linalg.norm(other.base_vars)))
+        # return np.arccos(np.dot(self.base_vars, other.base_vars) / (np.linalg.norm(self.base_vars) * np.linalg.norm(other.base_vars)))
+        norm_self = self.base_vars / np.linalg.norm(self.base_vars)
+        norm_other = other.base_vars / np.linalg.norm(other.base_vars)
+        return np.linalg.norm(norm_self - norm_other)
 
 
 Policy = A2C | DDPG | PPO | SAC | TD3 | VI
@@ -67,7 +70,7 @@ class DimensionalPolicy:
 
         Parameters:
         -----------
-        policy: A2C | DDPG | PPO | SAC | TD3
+        policy: A2C | DDPG | PPO | SAC | TD3 | VI
             the trained Stable-Baselines3 policy
         context: Context
             the context of this policy
@@ -102,7 +105,9 @@ class DimensionalPolicy:
         Should work 1:1 with Stable-Baselines3's predict. It does not support
         recurrent policies.
         """
+        # obs = self._normalize_obs(obs)
         act, norm_sta = self.policy.predict(obs, *args, **kwargs)
+        act = self._denormalize_act(act)
         return act, norm_sta
 
     def adim_predict(self, obs_s: np.ndarray, *args, **kwargs) -> np.ndarray:
@@ -114,11 +119,11 @@ class DimensionalPolicy:
         obs = self.context.to_adim_obs(obs_s)
         act, state = self.predict(obs, *args, **kwargs)
         act_s = self.context.from_adim_act(act)
-        print(act, act_s)
         return act_s, state
 
     def to_scaled(self, context: Context) -> "ScaledPolicy":
         """Returns a `ScaledPolicy` with new `context`."""
+        context.base_vars = context.base_vars / self.context.base_vars
         scaled_pol = ScaledPolicy(self, context)
         return scaled_pol
 
@@ -149,14 +154,15 @@ class ScaledPolicy:
         recurrent policies.
         """
         obs_s = self.context.to_adim_obs(obs)
-        act_s, state = self.dim_pol.adim_predict(obs_s, *args, **kwargs)
+        act_s, state = self.dim_pol.predict(obs_s, *args, **kwargs)
         act = self.context.from_adim_act(act_s)
+        # return act_s, state
         return act, state
 
 
 class PolicyTrainer:
 
-    def __init__(self, algo, context, env, **algo_params):
+    def __init__(self, algo, context, env, algo_params):
         self.model = algo(**algo_params)
         self.context = context
         self.env = env
@@ -175,6 +181,8 @@ class PolicyEvaluator:
 
     def __init__(self, policy: DimensionalPolicy, env):
         self.policy = policy
+        self.policy.obs_space = env.observation_space
+        self.policy.act_space = env.action_space
         self.env = env
         self.J = 0
 
@@ -183,19 +191,30 @@ class PolicyEvaluator:
         dJ = 1.0
         self.J += dJ
 
-    def evaluate(self, n_steps: int, render=False, **kwargs) -> float:
+    def evaluate(self, n_steps: int, render=False, adim=False, **kwargs) -> float:
         """Evaluates the policy for `n_steps` steps."""
         obs = self.env.reset()[0]
         self.J = 0
-        for _ in range(n_steps):
+        for ind in range(n_steps):
             action, states = self.policy.predict(obs, **kwargs)
             out = self.env.step(action)
             if len(out) == 4:
                 obs, reward, done, info = out
             elif len(out) == 5:
                 obs, reward, done, info, _ = out
-            self.compute_score(obs, action)
+
+            if adim:
+                obs2 = self.policy.context.to_adim_obs(obs)
+                action2 = self.policy.context.to_adim_act(action)
+            else:
+                obs2 = obs
+                action2 = action
+                
+            # print(action2)
+            self.compute_score(obs2, action2)
             if render:
-                self.env.render("human")
+                self.env.render_mode = 'human'
+            else:
+                self.env.render_mode = 'rgb_array'
 
         return self.J/n_steps
