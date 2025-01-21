@@ -4,6 +4,7 @@ from gymnasium.wrappers import RescaleAction, RescaleObservation
 import numpy as np
 from stable_baselines3 import A2C, DDPG, DQN, PPO, SAC, TD3
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from pipoli.core import Policy
 
@@ -84,7 +85,9 @@ class SB3PolicyTrainer:
         model_obs_space: Optional[Box] = None,
         model_act_space: Optional[Box] = None,
         algo_params: Optional[dict[str, Any]] = None,
-        env_params: Optional[dict[str, Any]] = None
+        env_params: Optional[dict[str, Any]] = None,
+        n_envs: int = 1,
+        use_multiprocess: bool = False,
     ):
         self.algo = algo
         self.env_fn = env_fn
@@ -92,6 +95,8 @@ class SB3PolicyTrainer:
         self.model_act_space = model_act_space
         self.algo_params = {} if algo_params is None else algo_params
         self.env_params = {} if env_params is None else env_params
+        self.n_envs = n_envs
+        self.use_multiprocess = use_multiprocess
 
     def _wrap_env(self, env):
         if self.model_obs_space is not None:
@@ -105,18 +110,16 @@ class SB3PolicyTrainer:
     def optimize_hyperparams(self, *args, **kwargs):
         raise NotImplementedError()
 
-    def train(self, *args, save=False, **kwargs) -> SB3Policy:
+    def train(self, *args, **kwargs) -> SB3Policy:
         vec_env = make_vec_env(
             self.env_fn,
-            n_envs=1, 
+            n_envs=self.n_envs, 
             env_kwargs=self.env_params,
             wrapper_class=self._wrap_env,
+            vec_env_cls=SubprocVecEnv if self.use_multiprocess else DummyVecEnv
             # TODO add all keywords
         )
         model = self.algo("MlpPolicy", vec_env, **self.algo_params).learn(*args, **kwargs)
-
-        # if save:
-        #     self.save_policy("trained_policy")
 
         env_obs_space = vec_env.unwrapped.observation_space
         env_act_space = vec_env.unwrapped.action_space
