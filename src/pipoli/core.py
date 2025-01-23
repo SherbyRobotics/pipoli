@@ -35,21 +35,30 @@ class Dimension:
     def __mul__(self, other: Union["Dimension", float, np.ndarray]) -> "Dimension":
         if isinstance(other, Dimension):
             return Dimension(self.powers + other.powers)
-        elif isinstance(other, (float, np.ndarray)):
+        elif isinstance(other, (int, float, np.ndarray)):
             return Dimension(self.powers + np.log10(other))
         else:
             return NotImplemented
+    
+    def __rmul__(self, other: Union["Dimension", float, np.ndarray]) -> "Dimension":
+        return self * other
 
     def __truediv__(self, other: Union["Dimension", float, np.ndarray]) -> "Dimension":
         if isinstance(other, Dimension):
             return Dimension(self.powers - other.powers)
-        elif isinstance(other, (float, np.ndarray)):
+        elif isinstance(other, (int, float, np.ndarray)):
             return Dimension(self.powers - np.log10(other))
         else:
             return NotImplemented
     
+    def __rtruediv__(self, other: Union["Dimension", float, np.ndarray]) -> "Dimension":
+        return self**-1 * other
+    
     def __pow__(self, power: float | np.ndarray) -> "Dimension":
         return Dimension(self.powers * power)
+
+
+Dimension.Unit = Dimension([0, 0, 0])
 
 
 class Context:
@@ -86,6 +95,7 @@ class Context:
         return str(self)
 
     def _compute_factor(self, dimension: Dimension, Binv: np.ndarray, values: np.ndarray) -> float:
+        print(-Binv, dimension.powers)
         mi = -Binv @ dimension.powers
         factor = np.prod(values**mi)
         
@@ -210,16 +220,16 @@ class ScaledPolicy:
         self_obs_to_adim   , _                     = context.make_transforms(obs_dims, base)
         _                  , self_act_from_adim    = context.make_transforms(act_dims, base)
 
-        def _scale_obs(obs):
+        def scale_obs(obs):
             obs_s = self_obs_to_adim(obs)
             return dim_pol_obs_from_adim(obs_s)
         
-        def _unscale_act(act):
+        def unscale_act(act):
             act_s = dim_pol_act_to_adim(act)
             return self_act_from_adim(act_s)
         
-        self._scale_obs = _scale_obs
-        self._unscale_act = _unscale_act
+        self._scale_obs = scale_obs
+        self._unscale_act = unscale_act
 
     def action(self, obs: np.ndarray) -> np.ndarray:
         """Returns the dimensional action corresponding to the dimensional observation."""
@@ -245,7 +255,7 @@ if __name__ == "__main__":
         g = L/T**2,
         l = L
     )
-    dim_tau = M*L**2/T**2
+    dim_tau = M * L**2 * 1/T**2
 
     context = Context([M, L, T], symbols, dims, values)
     to_adim, to_dim = context.make_transforms([dim_tau], symbols)
@@ -260,7 +270,7 @@ if __name__ == "__main__":
         def action(self, obs):
             return obs * 11
     
-    dim_pol = DimensionalPolicy(DummyPolicy(), context, [L], [M*L])
+    dim_pol = DimensionalPolicy(DummyPolicy(), context, [L], [1/M/L])
 
     assert dim_pol.action(np.array([1])) == np.array([11])
 
@@ -268,10 +278,10 @@ if __name__ == "__main__":
 
     import copy
 
-    new_context = copy.copy(context)
+    new_context = copy.deepcopy(context)
     new_context.values["l"] = 5
     scale_pol = dim_pol.to_scaled(new_context, symbols)
 
-    np.testing.assert_almost_equal(scale_pol.action(np.array([1])), np.array([1/5 * 3 * 11 * 1/6 * 10]))
-
+    np.testing.assert_almost_equal(scale_pol.action(np.array([1])), np.array([1/5 * 3 * 11 * 1/10 * 6]))
+   
     print("scaled policy ok")

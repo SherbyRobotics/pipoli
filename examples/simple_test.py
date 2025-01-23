@@ -1,5 +1,6 @@
+from pathlib import Path
 import sys
-sys.path.append("/home/fp/Dev/pipoli/src")
+sys.path.append(f"{str(Path('.').resolve())}/src")
 print(sys.path)
 
 import numpy as np
@@ -118,50 +119,61 @@ from pipoli.sources.sb3 import SB3Policy, SB3PolicyTrainer
 m = 1
 g = 9.8
 l = 2
-taumax = 200
+taumax = 220
 tf = 10
 
 env = Pendulum(m, g, l, taumax, tf)
 train_env = gym.wrappers.RescaleAction(env, -1, 1)
 train_env = gym.wrappers.RescaleObservation(train_env, -1, 1)
 
-# model = SAC("MlpPolicy", train_env, verbose=1).learn(10000)
-# model.save("model")
-# model = SAC.load("sandbox/model")
+model = SAC("MlpPolicy", train_env, verbose=1).learn(1000)
+model.save("sandbox/model")
+model = SAC.load("sandbox/model")
 
-# sb3_pol = SB3Policy(
-#     model,
-#     train_env.observation_space,
-#     train_env.action_space,
-#     env.observation_space,
-#     env.action_space,
-#     dict(deterministic=True)
-# )
-
-trainer = SB3PolicyTrainer(
-    PPO,
-    Pendulum,
-    model_obs_space=None,#train_env.observation_space,
-    model_act_space=None,#train_env.action_space,
-    env_params=dict(m=m, g=g, l=l, taumax=taumax, tf=tf)
+sb3_pol = SB3Policy(
+    model,
+    train_env.observation_space,
+    train_env.action_space,
+    env.observation_space,
+    env.action_space,
+    dict(deterministic=True)
 )
 
-sb3_pol = trainer.train(1000)
+# trainer = SB3PolicyTrainer(
+#     PPO,
+#     Pendulum,
+#     model_obs_space=None,#train_env.observation_space,
+#     model_act_space=None,#train_env.action_space,
+#     env_params=dict(m=m, g=g, l=l, taumax=taumax, tf=tf)
+# )
 
-from pipoli.core import DimensionalPolicy, Context
+# sb3_pol = trainer.train(100000)
 
-obs_transform = lambda base: np.array([1, np.sqrt(base[0]*base[1]/base[2])])
-act_transform = lambda base: np.array([1/base[2]])
+from pipoli.core import Dimension, Context, DimensionalPolicy
 
-context1 = Context([m, l, taumax], obs_transform, act_transform)
+M = Dimension([1, 0, 0])
+L = Dimension([0, 1, 0])
+T = Dimension([0, 0, 1])
 
-dim_pol = DimensionalPolicy(sb3_pol, context1)  # first pendulum policy
+symbols = ["m", "g", "l", "taumax"]
+dimensions = dict(m = M, g = L/T**2, l = L, taumax = M*L**2/T**2)
+values1 = dict(m = m, g = g, l = l, taumax = taumax)
 
+context1 = Context(
+    [M, L, T],
+    symbols,
+    dimensions,
+    values1
+)
+
+obs_dims = [Dimension.Unit, 1/T]
+act_dims = [M*L**2*T**2]
+dim_pol = DimensionalPolicy(sb3_pol, context1, obs_dims, act_dims)  # first pendulum policy
 og_env = Pendulum(m, g, l, taumax, tf, render_mode="human")
 
 trunc = False
 obs, _ = og_env.reset()
-# breakpoint()
+
 while not trunc:
     act = dim_pol.action(obs)
     obs, _, _, trunc, info = og_env.step(act)
@@ -172,9 +184,16 @@ m2 = 2
 l2 = 1
 taumax2 = 100
 
-context2 = Context([m2, l2, taumax2], obs_transform, act_transform)
+values2 = dict(m = m2, l = l2, taumax = taumax2)
 
-scaled_pol = dim_pol >> context2
+context2 = Context(
+    [M, L, T],
+    symbols,
+    dimensions,
+    values2
+)
+
+scaled_pol = dim_pol.to_scaled(context2, ["m", "l", "taumax"])
 
 eval_env = Pendulum(m2, g, l2, taumax2, tf, render_mode="human")
 
