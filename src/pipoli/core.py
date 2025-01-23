@@ -1,7 +1,7 @@
 from abc import abstractmethod, ABC
 import numpy as np
 
-from typing import Callable, Union#, override
+from typing import Callable, Union
 
 
 class Dimension:
@@ -16,7 +16,7 @@ class Dimension:
     >>> km = 1000 * L  # a kilometer
     """
 
-    def __init__(self, powers: np.ndarray, factors: np.ndarray | float=1):
+    def __init__(self, powers: Union[np.ndarray, list[float]]):
         """Initialize a dimension.
 
         Parameters:
@@ -52,7 +52,7 @@ class Dimension:
         return Dimension(self.powers * power)
 
 
-class NewContext:
+class Context:
 
     def __init__(self,
         base_dimensions: list[Dimension],
@@ -88,12 +88,17 @@ class NewContext:
     def _compute_factor(self, dimension: Dimension, Binv: np.ndarray, values: np.ndarray) -> float:
         mi = -Binv @ dimension.powers
         factor = np.prod(values**mi)
-
-        print(dimension, mi, factor)
         
         return factor
     
-    def make_transforms(self, dimensions: list[Dimension], base: list[str]) -> tuple[Callable[[np.ndarray], np.ndarray], Callable[[np.ndarray], np.ndarray]]:
+    def make_transforms(self,
+        dimensions: list[Dimension],
+        base: list[str]
+    ) -> tuple[
+        Callable[[np.ndarray], np.ndarray],
+        Callable[[np.ndarray], np.ndarray]
+    ]:
+        """Returns two function to adimensionalize and re-dimensionalize the dimensions using the base."""
         if not all(b in self.symbols for b in base):
             raise ValueError(f"all symbols in `base` ({base}) must be in the context ({self.symbols})")
         
@@ -124,56 +129,6 @@ class NewContext:
         return to_adim, from_adim
 
 
-class Context:
-
-    def __init__(
-        self,
-        base_vars: np.ndarray,
-        obs_transform: Callable[[np.ndarray],np.ndarray],
-        act_transform: Callable[[np.ndarray], np.ndarray]
-    ):
-        """Initialize a context.
-
-        Parameters:
-        -----------
-        base_vars: array[n]
-            the system's variable used to cancel the units
-        obs_transform: fn(array[n]) -> array[m]
-            a function that computes the factors to non dimensionalize an observation
-        act_transform: fn(array[n]) -> array[p]
-            a function that computes the factors to non dimensionalize an action
-        """
-        self.base_vars = np.array(base_vars)
-        self.obs_transform = obs_transform
-        self.act_transform = act_transform
-
-    def from_adim_obs(self, obs_s: np.ndarray) -> np.ndarray:
-        """Converts a non dimensional observation back to a dimensional one."""
-        return obs_s / self.obs_transform(self.base_vars)
-
-    def to_adim_obs(self, obs: np.ndarray) -> np.ndarray:
-        """Converts a dimensional observation to a non dimensional one."""
-        return obs * self.obs_transform(self.base_vars)
-
-    def from_adim_act(self, act_s: np.ndarray) -> np.ndarray:
-        """Converts a non dimensional action back to a dimensional one."""
-        return act_s / self.act_transform(self.base_vars)
-
-    def to_adim_act(self, act: np.ndarray) -> np.ndarray:
-        """Converts a dimensional action to a non dimensional one."""
-        return act * self.act_transform(self.base_vars)
-    
-    def save(self, path: str):
-        np.save(path + '.npy', self.base_vars)
-
-    def compare(self, other: "Context") -> bool:
-        return np.linalg.norm(self.base_vars - other.base_vars)
-    
-    def adim_compare(self, other: "Context") -> bool:
-        # return the angle between the two vectors
-        return np.arccos(np.dot(self.base_vars, other.base_vars) / (np.linalg.norm(self.base_vars) * np.linalg.norm(other.base_vars)))
-
-
 class Policy(ABC):
     """A generic policy interface."""
 
@@ -185,7 +140,12 @@ class Policy(ABC):
 
 class DimensionalPolicy(Policy):
 
-    def __init__(self, policy: Policy, context: Context):
+    def __init__(self,
+        policy: Policy,
+        context: Context,
+        obs_dims: list[Dimension],
+        act_dims: list[Dimension]
+    ):
         """Initialize a dimensional policy from a source policy.
 
         Parameters:
@@ -194,39 +154,39 @@ class DimensionalPolicy(Policy):
             a source policy
         context: Context
             the context of this policy
+        obs_dims: list[Dimension]
+            the dimension of each input of the policy
+        act_dims: list[Dimension]
+            the dimension of each output of the policy
         """
         self.context = context
         self.policy = policy
+        self.obs_dims = obs_dims
+        self.act_dims = act_dims
 
-    def __rshift__(self, context: Context) -> "ScaledPolicy":
-        return self.to_scaled(context)
-    
-    #@override
     def action(self, obs: np.ndarray) -> np.ndarray:
         """Returns the dimensional action corresponding to the dimensional observation."""
         act = self.policy.action(obs)
         return act
 
-    def adim_action(self, obs_s: np.ndarray) -> np.ndarray:
-        """Returns the adimensional action corresponding to the adimensional observation."""
-        obs = self.context.to_adim_obs(obs_s)
-        act = self.action(obs)
-        act_s = self.context.from_adim_act(act)
-        return act_s
-
-    def to_scaled(self, context: Context) -> "ScaledPolicy":
+    def to_scaled(self, context: Context, base: list[str]) -> "ScaledPolicy":
         """Returns a `ScaledPolicy` with new `context`."""
-        scaled_pol = ScaledPolicy(self, context)
+        scaled_pol = ScaledPolicy(self, context, base)
         return scaled_pol
 
     def save_policy(self, path: str):
-        self.policy.save(path + "model")
-        self.context.save(path + "context")
+        # self.policy.save(path + "model")
+        # self.context.save(path + "context")
+        raise NotImplementedError("todo")
 
 
 class ScaledPolicy:
 
-    def __init__(self, dim_pol: DimensionalPolicy, context: Context):
+    def __init__(self,
+        dim_pol: DimensionalPolicy,
+        context: Context,
+        base: list[str]
+    ):
         """Initialize a scaled dimensional policy from a dimensional policy.
 
         Parameters:
@@ -235,14 +195,83 @@ class ScaledPolicy:
             the base dimensional policy
         context: Context
             the context of the scaled policy
+        base: list[str]
+            the symbols used to scale the policy
         """
         self.dim_pol = dim_pol
         self.context = context
+        self.base = base
+        
+        obs_dims = dim_pol.obs_dims
+        act_dims = dim_pol.act_dims
 
-    #@override
+        _                  , dim_pol_obs_from_adim = dim_pol.context.make_transforms(obs_dims, base)
+        dim_pol_act_to_adim, _                     = dim_pol.context.make_transforms(act_dims, base)
+        self_obs_to_adim   , _                     = context.make_transforms(obs_dims, base)
+        _                  , self_act_from_adim    = context.make_transforms(act_dims, base)
+
+        def _scale_obs(obs):
+            obs_s = self_obs_to_adim(obs)
+            return dim_pol_obs_from_adim(obs_s)
+        
+        def _unscale_act(act):
+            act_s = dim_pol_act_to_adim(act)
+            return self_act_from_adim(act_s)
+        
+        self._scale_obs = _scale_obs
+        self._unscale_act = _unscale_act
+
     def action(self, obs: np.ndarray) -> np.ndarray:
         """Returns the dimensional action corresponding to the dimensional observation."""
-        obs_s = self.context.to_adim_obs(obs)
-        act_s = self.dim_pol.adim_action(obs_s)
-        act = self.context.from_adim_act(act_s)
+        obs_scaled = self._scale_obs(obs)
+        act_scaled = self.dim_pol.action(obs_scaled)
+        act = self._unscale_act(act_scaled)
         return act
+
+
+if __name__ == "__main__":
+    symbols = ["m", "g", "l"]
+    values = dict(
+        m = 2,
+        g = 7,
+        l = 3
+    )
+
+    M = Dimension([1, 0, 0])
+    L = Dimension([0, 1, 0])
+    T = Dimension([0, 0, 1])
+    dims = dict(
+        m = M,
+        g = L/T**2,
+        l = L
+    )
+    dim_tau = M*L**2/T**2
+
+    context = Context([M, L, T], symbols, dims, values)
+    to_adim, to_dim = context.make_transforms([dim_tau], symbols)
+
+    assert to_adim(1) == 1/42
+    assert to_dim(1) == 42
+
+    print("dimension and context ok")
+
+    class DummyPolicy(Policy):
+
+        def action(self, obs):
+            return obs * 11
+    
+    dim_pol = DimensionalPolicy(DummyPolicy(), context, [L], [M*L])
+
+    assert dim_pol.action(np.array([1])) == np.array([11])
+
+    print("dimensional policy ok")
+
+    import copy
+
+    new_context = copy.copy(context)
+    new_context.values["l"] = 5
+    scale_pol = dim_pol.to_scaled(new_context, symbols)
+
+    np.testing.assert_almost_equal(scale_pol.action(np.array([1])), np.array([1/5 * 3 * 11 * 1/6 * 10]))
+
+    print("scaled policy ok")
