@@ -184,7 +184,7 @@ m2 = 2
 l2 = 1
 taumax2 = 100
 
-values2 = dict(m = m2, l = l2, taumax = taumax2)
+values2 = dict(m = m2, l = l2, g = g, taumax = taumax2)
 
 context2 = Context(
     [M, L, T],

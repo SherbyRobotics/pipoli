@@ -62,6 +62,15 @@ Dimension.Unit = Dimension([0, 0, 0])
 
 
 class Context:
+    """Represents the context of a system.
+    
+    A context contains all the quantities that parametrizes a system.
+    A quantity is described by its symbol, its dimension (read units) and its
+    value.
+    
+    The context allows to keep track of how the quantities change when they are
+    seen in a similar system with different parameters.
+    """
 
     def __init__(self,
         base_dimensions: list[Dimension],
@@ -83,19 +92,56 @@ class Context:
             the value of each quantity of the system
 
         """
+        self._assert_well_formed(symbols, dimensions, values)
+        
+        symbols = sorted(symbols)
+        dims = np.array([dimensions[sym] for sym in symbols])
+        vals = np.array([values[sym] for sym in symbols])
+
+        # formal definition of 
         self.base_dimensions = base_dimensions
         self.symbols = symbols
-        self.dimensions = dimensions
-        self.values = values
+        self.dimensions = dims
+        self.values = vals
+    
+    @staticmethod
+    def _assert_well_formed(symbols, dimensions, values):
+        symbols_set = set(symbols)
+
+        if len(symbols) != len(symbols_set):
+            raise ValueError("a symbol in `symbols` is repeated")
+
+        dimensions_symbols = set(dimensions.keys())
+        values_symbols = set(values.keys())
+
+        if dimensions_symbols != symbols_set:
+            raise ValueError(
+                "symbols used in `dimensions` are different than in `symbols`: "
+                f"{symbols_set.symmetric_difference(dimensions_symbols)}"
+            )
+        
+        if values_symbols != symbols_set:
+            raise ValueError(
+                "symbols used in `values` are different than in `symbols`: "
+                f"{symbols_set.symmetric_difference(values_symbols)}"
+            )
     
     def __str__(self):
+        dimensions = dict(zip(self.symbols, self.dimensions))
         return f"Context({self.base_dimensions}, {self.symbols}, {self.dimensions}, {self.values})"
 
     def __repr__(self):
         return str(self)
+    
+    def value(self, symbol):
+        index = self.symbols.index(symbol)
+        return self.values[index]
+    
+    def dimension(self, symbol):
+        index = self.symbols.index(symbol)
+        return self.dimensions[index]
 
     def _compute_factor(self, dimension: Dimension, Binv: np.ndarray, values: np.ndarray) -> float:
-        print(-Binv, dimension.powers)
         mi = -Binv @ dimension.powers
         factor = np.prod(values**mi)
         
@@ -112,9 +158,9 @@ class Context:
         if not all(b in self.symbols for b in base):
             raise ValueError(f"all symbols in `base` ({base}) must be in the context ({self.symbols})")
         
-        values = np.array([self.values[b] for b in base])
+        values = np.array([self.value(b) for b in base])
 
-        dims_base = [self.dimensions[b].powers for b in base]
+        dims_base = [self.dimension(b).powers for b in base]
         B = np.vstack(dims_base).T
 
         if np.linalg.matrix_rank(B) != len(self.base_dimensions):
@@ -137,7 +183,29 @@ class Context:
             return x / factors
 
         return to_adim, from_adim
+    
+    def _assert_compatible(self, other):
+        same_symbols = set(self.symbols) == set(other.symbols)
+        # TODO complete checks
+        same_base_dimensions = ...
+        sames_dimensions = ...
 
+        if not (same_symbols and same_base_dimensions and sames_dimensions):
+            raise ValueError(f"contexts {self} and {other} are incompatible")
+
+    def cosine_similarity(self, other: "Context") -> float:
+        self._assert_compatible(other)
+
+        return self.values @ other.values / np.linalg.norm(self.values) / np.linalg.norm(other.values)
+    
+    def adimensional_distance(self, other: "Context", base: list[str]) -> float:
+        self_to_adim, _ = self.make_transforms(self.dimensions, base)
+        other_to_adim, _ = other.make_transforms(other.dimensions, base)
+
+        self_adim_values = self_to_adim(self.values)
+        other_adim_values = other_to_adim(other.values)
+
+        return np.linalg.norm(self_adim_values - other_adim_values)
 
 class Policy(ABC):
     """A generic policy interface."""
@@ -240,11 +308,12 @@ class ScaledPolicy:
 
 
 if __name__ == "__main__":
-    symbols = ["m", "g", "l"]
+    symbols = ["m", "g", "l", "taumax"]
     values = dict(
         m = 2,
         g = 7,
-        l = 3
+        l = 3,
+        taumax=19
     )
 
     M = Dimension([1, 0, 0])
@@ -253,12 +322,14 @@ if __name__ == "__main__":
     dims = dict(
         m = M,
         g = L/T**2,
-        l = L
+        l = L,
+        taumax = M * L**2 / T**2
     )
     dim_tau = M * L**2 * 1/T**2
 
     context = Context([M, L, T], symbols, dims, values)
-    to_adim, to_dim = context.make_transforms([dim_tau], symbols)
+    basis = symbols[:-1]
+    to_adim, to_dim = context.make_transforms([dim_tau], basis)
 
     assert to_adim(1) == 1/42
     assert to_dim(1) == 42
@@ -278,10 +349,29 @@ if __name__ == "__main__":
 
     import copy
 
-    new_context = copy.deepcopy(context)
-    new_context.values["l"] = 5
-    scale_pol = dim_pol.to_scaled(new_context, symbols)
+    new_values = dict(
+        m = 2,
+        g = 7,
+        l = 5,
+        taumax = 19,
+    )
+    new_context = Context([M, L, T], symbols, dims, new_values)
+
+    scale_pol = dim_pol.to_scaled(new_context, basis)
 
     np.testing.assert_almost_equal(scale_pol.action(np.array([1])), np.array([1/5 * 3 * 11 * 1/10 * 6]))
    
     print("scaled policy ok")
+
+    np.testing.assert_almost_equal(context.cosine_similarity(context), 1)
+    np.testing.assert_almost_equal(
+        context.cosine_similarity(new_context),
+        (2*2 + 7*7 + 3*5 + 19*19) / np.sqrt(2*2 + 7*7 + 3*3 + 19*19) / np.sqrt(2*2 + 7*7 + 5*5 + 19*19)
+    )
+
+    print("cosine similarity ok")
+
+    assert context.adimensional_distance(context, basis) == 0
+    assert context.adimensional_distance(new_context, basis) == abs(19 / 2 / 7 / 3 - 19 / 2 / 7 / 5)
+
+    print("adimensional distance ok")
