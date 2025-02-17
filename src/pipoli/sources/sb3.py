@@ -52,14 +52,20 @@ class SB3Policy(Policy):
         self.env_act_space = env_act_space
 
         self.predict_kwargs = {} if predict_kwargs is None else predict_kwargs
-
-        self._env_to_model_obs = lambda x: x
-        if env_obs_space is not None:
-            _, self._env_to_model_obs, _ = rescale_box(env_obs_space, model_obs_space.low, model_obs_space.high)
         
-        self._model_to_env_act = lambda x: x
-        if env_act_space is not None:
-            _, self._model_to_env_act, _ = rescale_box(model_act_space, env_act_space.low, env_act_space.high)
+        match env_obs_space:
+            case None:
+                self._env_to_model_obs = lambda x: x
+            case box:
+                _, to_scale, _ = rescale_box(box, model_obs_space.low, model_obs_space.high)
+                self._env_to_model_obs = to_scale
+
+        match env_act_space:
+            case None:
+                self._model_to_env_act = lambda x: x
+            case box:
+                _, _, from_scale = rescale_box(box, model_act_space.low, model_act_space.high)
+                self._model_to_env_act = from_scale
 
     def action(self, obs: np.ndarray) -> np.ndarray:
         """Returns the action corresponding to the observation."""
