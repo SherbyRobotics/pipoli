@@ -201,6 +201,8 @@ class Context:
         return self.values @ other.values / np.linalg.norm(self.values) / np.linalg.norm(other.values)
     
     def adimensional_distance(self, other: "Context", base: list[str]) -> float:
+        self._assert_compatible(other)
+
         self_to_adim, _ = self.make_transforms(self.dimensions, base)
         other_to_adim, _ = other.make_transforms(other.dimensions, base)
 
@@ -208,6 +210,11 @@ class Context:
         other_adim_values = other_to_adim(other.values)
 
         return np.linalg.norm(self_adim_values - other_adim_values)
+
+    def euclidian_distance(self, other: "Context") -> float:
+        self._assert_compatible(other)
+
+        return np.linalg.norm(self.values - other.values)
 
 class Policy(ABC):
     """A generic policy interface."""
