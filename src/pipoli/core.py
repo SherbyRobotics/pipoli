@@ -72,13 +72,23 @@ class Context:
     
     The context allows to keep track of how the quantities change when they are
     seen in a similar system with different parameters.
+
+    Example:
+    --------
+    >>> context = Context(
+    ...     base_dimension,
+    ...     *zip(
+    ...         ("sym1", D, 42),
+    ...         ("sym2", D, 37),
+    ...     )
+    ... )
     """
 
     def __init__(self,
         base_dimensions: list[Dimension],
         symbols: list[str],
-        dimensions: dict[str, Dimension],
-        values: dict[str, float]
+        dimensions: list[Dimension],
+        values: list[float]
     ):
         """Initialize a context.
 
@@ -88,44 +98,47 @@ class Context:
             the base dimensions of the units of the system
         symbols: list[str]
             the symbols of the quantities of the system
-        dimensions: dict[str, Dimension]
+        dimensions: list[Dimension]
             the dimensions of each quantity of the system
-        values: dict[str, float]
+        values: list[float]
             the value of each quantity of the system
 
         """
         self._assert_well_formed(symbols, dimensions, values)
         
-        symbols = sorted(symbols)
-        dims = np.array([dimensions[sym] for sym in symbols])
-        vals = np.array([values[sym] for sym in symbols])
+        # reorder the symbols
+        all_sorted = zip(
+            *sorted(
+                zip(symbols, dimensions, values),
+                key=lambda t: t[0]
+            )
+        )
+        symbols = next(all_sorted)
+        dimensions = next(all_sorted)
+        values = np.array(next(all_sorted))
 
-        # formal definition of 
+
+        # formal definition of a Context
         self.base_dimensions = base_dimensions
         self.symbols = symbols
-        self.dimensions = dims
-        self.values = vals
+        self.dimensions = dimensions
+        self.values = values
     
     @staticmethod
     def _assert_well_formed(symbols, dimensions, values):
         symbols_set = set(symbols)
 
         if len(symbols) != len(symbols_set):
-            raise ValueError("a symbol in `symbols` is repeated")
+            raise ValueError("a symbol is repeated")
 
-        dimensions_symbols = set(dimensions.keys())
-        values_symbols = set(values.keys())
-
-        if dimensions_symbols != symbols_set:
+        if len(dimensions) != len(symbols):
             raise ValueError(
-                "symbols used in `dimensions` are different than in `symbols`: "
-                f"{symbols_set.symmetric_difference(dimensions_symbols)}"
+                f"the number of dimensions ({len(dimensions)}) doesn't match the number of symbols ({len(symbols)})"
             )
         
-        if values_symbols != symbols_set:
+        if len(values) != len(symbols):
             raise ValueError(
-                "symbols used in `values` are different than in `symbols`: "
-                f"{symbols_set.symmetric_difference(values_symbols)}"
+                f"the number of values ({len(values)}) doesn't match the number of symbols ({len(symbols)})"
             )
     
     def __str__(self):
@@ -143,13 +156,15 @@ class Context:
         index = bisect_left(self.symbols, symbol)
         return self.dimensions[index]
 
-    def _compute_factor(self, dimension: Dimension, Binv: np.ndarray, values: np.ndarray) -> float:
+    @staticmethod
+    def _compute_factor(dimension: Dimension, Binv: np.ndarray, values: np.ndarray) -> float:
         mi = -Binv @ dimension.powers
         factor = np.prod(values**mi)
         
         return factor
-    
-    def make_transforms(self,
+
+    def make_transforms(
+        self,
         dimensions: list[Dimension],
         base: list[str]
     ) -> tuple[
@@ -187,7 +202,7 @@ class Context:
         return to_adim, from_adim
     
     def _assert_compatible(self, other):
-        same_symbols = set(self.symbols) == set(other.symbols)
+        same_symbols = self.symbols == other.symbols
         # TODO complete checks
         same_base_dimensions = ...
         sames_dimensions = ...
@@ -317,27 +332,24 @@ class ScaledPolicy:
 
 
 if __name__ == "__main__":
-    symbols = ["m", "g", "l", "taumax"]
-    values = dict(
-        m = 2,
-        g = 7,
-        l = 3,
-        taumax=19
-    )
 
     M = Dimension([1, 0, 0])
     L = Dimension([0, 1, 0])
     T = Dimension([0, 0, 1])
-    dims = dict(
-        m = M,
-        g = L/T**2,
-        l = L,
-        taumax = M * L**2 / T**2
-    )
+
     dim_tau = M * L**2 * 1/T**2
 
-    context = Context([M, L, T], symbols, dims, values)
-    basis = symbols[:-1]
+    context = Context(
+        [M, L, T],
+        *zip(
+            ("m", M, 2),
+            ("g", L/T**2, 7),
+            ("l", L, 3),
+            ("taumax", M*L**2/T**2, 19)
+        )
+    )
+
+    basis = ["m", "g", "l"]
     to_adim, to_dim = context.make_transforms([dim_tau], basis)
 
     assert to_adim(1) == 1/42
@@ -358,13 +370,15 @@ if __name__ == "__main__":
 
     import copy
 
-    new_values = dict(
-        m = 2,
-        g = 7,
-        l = 5,
-        taumax = 19,
+    new_context = Context(
+        [M, L, T],
+        *zip(
+            ("m", M, 2),
+            ("g", L/T**2, 7),
+            ("l", L, 5),
+            ("taumax", M*L**2/T**2, 19)
+        )
     )
-    new_context = Context([M, L, T], symbols, dims, new_values)
 
     scale_pol = dim_pol.to_scaled(new_context, basis)
 
