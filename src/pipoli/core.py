@@ -1,4 +1,6 @@
 from abc import abstractmethod, ABC
+from bisect import bisect_left
+
 import numpy as np
 
 from typing import Callable, Union
@@ -134,11 +136,11 @@ class Context:
         return str(self)
     
     def value(self, symbol):
-        index = self.symbols.index(symbol)
+        index = bisect_left(self.symbols, symbol)
         return self.values[index]
     
     def dimension(self, symbol):
-        index = self.symbols.index(symbol)
+        index = bisect_left(self.symbols, symbol)
         return self.dimensions[index]
 
     def _compute_factor(self, dimension: Dimension, Binv: np.ndarray, values: np.ndarray) -> float:
