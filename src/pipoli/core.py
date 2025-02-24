@@ -54,11 +54,8 @@ class Dimension:
     def __rtruediv__(self, other: Union["Dimension", float, np.ndarray]) -> "Dimension":
         return self**-1 * other
     
-    def __pow__(self, power: float | np.ndarray) -> "Dimension":
+    def __pow__(self, power: Union[float, np.ndarray]) -> "Dimension":
         return Dimension(self.powers * power)
-
-
-Dimension.Unit = Dimension([0, 0, 0])
 
 
 class Context:

@@ -154,6 +154,7 @@ from pipoli.core import Dimension, Context, DimensionalPolicy
 M = Dimension([1, 0, 0])
 L = Dimension([0, 1, 0])
 T = Dimension([0, 0, 1])
+Unit = Dimension([0, 0, 0])
 
 symbols = ["m", "g", "l", "taumax"]
 dimensions = dict(m = M, g = L/T**2, l = L, taumax = M*L**2/T**2)
@@ -166,7 +167,7 @@ context1 = Context(
     values1
 )
 
-obs_dims = [Dimension.Unit, 1/T]
+obs_dims = [Unit, 1/T]
 act_dims = [M*L**2*T**2]
 dim_pol = DimensionalPolicy(sb3_pol, context1, obs_dims, act_dims)  # first pendulum policy
 og_env = Pendulum(m, g, l, taumax, tf, render_mode="human")
