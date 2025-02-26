@@ -156,15 +156,14 @@ L = Dimension([0, 1, 0])
 T = Dimension([0, 0, 1])
 Unit = Dimension([0, 0, 0])
 
-symbols = ["m", "g", "l", "taumax"]
-dimensions = dict(m = M, g = L/T**2, l = L, taumax = M*L**2/T**2)
-values1 = dict(m = m, g = g, l = l, taumax = taumax)
-
 context1 = Context(
     [M, L, T],
-    symbols,
-    dimensions,
-    values1
+    *zip(
+        ("m", M, m),
+        ("g", L/T**2, g),
+        ("l", L, l),
+        ("taumax", M*L**2/T**2, taumax)
+    )
 )
 
 obs_dims = [Unit, 1/T]
@@ -185,13 +184,14 @@ m2 = 2
 l2 = 1
 taumax2 = 100
 
-values2 = dict(m = m2, l = l2, g = g, taumax = taumax2)
-
 context2 = Context(
     [M, L, T],
-    symbols,
-    dimensions,
-    values2
+    *zip(
+        ("m", M, m2),
+        ("g", L/T**2, g),
+        ("l", L, l2),
+        ("taumax", M*L**2/T**2, taumax2)
+    )
 )
 
 scaled_pol = dim_pol.to_scaled(context2, ["m", "l", "taumax"])
