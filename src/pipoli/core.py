@@ -159,6 +159,15 @@ class Context:
         factor = np.prod(values**mi)
         
         return factor
+    
+    def _compute_Binv(self, base):
+        dims_base = [self.dimension(b).powers for b in base]
+        B = np.vstack(dims_base).T
+
+        if np.linalg.matrix_rank(B) != len(self.base_dimensions):
+            return ValueError("the base doesn't span the dimension space")
+
+        return np.linalg.inv(B)
 
     def make_transforms(
         self,
@@ -174,13 +183,7 @@ class Context:
         
         values = np.array([self.value(b) for b in base])
 
-        dims_base = [self.dimension(b).powers for b in base]
-        B = np.vstack(dims_base).T
-
-        if np.linalg.matrix_rank(B) != len(self.base_dimensions):
-            return ValueError("the base doesn't span the dimension space")
-        
-        Binv = np.linalg.inv(B)
+        Binv = self._compute_Binv(base)
 
         factors = np.zeros(len(dimensions))
         for i, dim in enumerate(dimensions):
@@ -197,6 +200,21 @@ class Context:
             return x / factors
 
         return to_adim, from_adim
+    
+    def scale_to(self, base: list[str], values: list[float]) -> "Context":
+        """Returns a new context with its values scaled to `values` according to the `base`."""
+        og_values = np.array([self.value(b) for b in base])
+        Binv = self._compute_Binv(base)
+
+        factors = np.zeros(self.values.shape)
+        for i, dim in enumerate(self.dimensions):
+            to_adim = self._compute_factor(dim, Binv, og_values)
+            to_new = self._compute_factor(dim, Binv, values)
+            factors[i] = to_adim / to_new
+        
+        new_values = self.values * factors
+
+        return Context(self.base_dimensions, self.symbols, self.dimensions, new_values)
     
     def _assert_compatible(self, other):
         same_symbols = self.symbols == other.symbols
@@ -395,3 +413,10 @@ if __name__ == "__main__":
     assert context.adimensional_distance(new_context, basis) == abs(19 / 2 / 7 / 3 - 19 / 2 / 7 / 5)
 
     print("adimensional distance ok")
+
+    scaled_context = new_context.scale_to(["m","g","l"], [23, 29, 31])
+
+    assert scaled_context.value("taumax") == 19 / 2 / 7 / 5 * 23 * 29 * 31
+
+    print("context scaling ok")
+
