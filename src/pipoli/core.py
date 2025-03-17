@@ -147,10 +147,14 @@ class Context:
     
     def value(self, symbol):
         index = bisect_left(self.symbols, symbol)
+        if self.symbols[index] != symbol:
+            raise KeyError(f"symbol '{symbol}' not in context")
         return self.values[index]
     
     def dimension(self, symbol):
         index = bisect_left(self.symbols, symbol)
+        if self.symbols[index] != symbol:
+            raise KeyError(f"symbol '{symbol}' not in context")
         return self.dimensions[index]
 
     @staticmethod
@@ -419,4 +423,18 @@ if __name__ == "__main__":
     assert scaled_context.value("taumax") == 19 / 2 / 7 / 5 * 23 * 29 * 31
 
     print("context scaling ok")
+
+    try:
+        scaled_context.value("not in context")
+    except KeyError as e:
+        assert str(e) == "symbol 'not in context' not in context"
+
+        print("context wrong symbol value ok")
+    
+    try:
+        scaled_context.dimension("not in context")
+    except KeyError as e:
+        assert str(e) == "symbol 'not in context' not in context"
+
+        print("context wrong symbol dimension ok")
 
