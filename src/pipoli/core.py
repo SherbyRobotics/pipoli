@@ -64,6 +64,15 @@ class Transform:
     """Represents the tranformation to go to the adimensional space and back."""
 
     def __init__(self, dims: list[Dimension], base_dims: list[Dimension]):
+        """Initialize a Transform.
+
+        Parameters:
+        -----------
+        dims: list[Dimension]
+            the dimensions to simplify
+        base_dims: list[Dimension]
+            the dimensions used to simplify the `dims`
+        """
         self._assert_all_same_number_of_base_dimension(dims, base_dims)
 
         self.dims = dims
@@ -188,7 +197,6 @@ class Context:
         dimensions = next(all_sorted)
         values = np.array(next(all_sorted))
 
-
         # formal definition of a Context
         self.base_dimensions = base_dimensions
         self.symbols = symbols
@@ -230,22 +238,10 @@ class Context:
     
     def dimension(self, symbol):
         return self.dimensions[self._index_of(symbol)]
-
-    @staticmethod
-    def _compute_factor(dimension: Dimension, Binv: np.ndarray, values: np.ndarray) -> float:
-        mi = -Binv @ dimension.powers
-        factor = np.prod(values**mi)
-        
-        return factor
     
-    def _compute_Binv(self, base):
-        dims_base = [self.dimension(b).powers for b in base]
-        B = np.vstack(dims_base).T
-
-        if np.linalg.matrix_rank(B) != len(self.base_dimensions):
-            raise ValueError("the base doesn't span the dimension space")
-
-        return np.linalg.inv(B)
+    def _assert_base_in_symbols(self, base):
+        if not all(b in self.symbols for b in base):
+            raise ValueError(f"all symbols in `base` ({base}) must be in the context ({self.symbols})")
 
     def make_transforms(
         self,
@@ -256,8 +252,7 @@ class Context:
         Callable[[np.ndarray], np.ndarray]
     ]:
         """Returns two function to adimensionalize and re-dimensionalize the dimensions using the base."""
-        if not all(b in self.symbols for b in base):
-            raise ValueError(f"all symbols in `base` ({base}) must be in the context ({self.symbols})")
+        self._assert_base_in_symbols(base)
         
         base_values = np.array([self.value(b) for b in base])
         base_dims = [self.dimension(b) for b in base]
@@ -268,22 +263,22 @@ class Context:
         from_adim = transform.make_from_adim(base_values)
 
         return to_adim, from_adim
-    
+
     def scale_to(self, base: list[str], values: list[float]) -> "Context":
         """Returns a new context with its values scaled to `values` according to the `base`."""
-        og_values = np.array([self.value(b) for b in base])
-        Binv = self._compute_Binv(base)
+        self._assert_base_in_symbols(base)
 
-        factors = np.zeros(self.values.shape)
-        for i, dim in enumerate(self.dimensions):
-            to_adim = self._compute_factor(dim, Binv, og_values)
-            to_new = self._compute_factor(dim, Binv, values)
-            factors[i] = to_adim / to_new
-        
-        new_values = self.values * factors
+        base_dims = [self.dimension(b) for b in base]
+        transform = Transform(self.dimensions, base_dims)
+
+        original_base_values = np.array([self.value(b) for b in base])
+        adim_values = transform.to_adim(self.values, original_base_values)
+
+        new_base_values = np.array(values)
+        new_values = transform.from_adim(adim_values, new_base_values)
 
         return Context(self.base_dimensions, self.symbols, self.dimensions, new_values)
-    
+
     def _assert_compatible(self, other):
         same_symbols = self.symbols == other.symbols
         # TODO complete checks
@@ -501,7 +496,7 @@ if __name__ == "__main__":
 
     scaled_context = new_context.scale_to(["m","g","l"], [23, 29, 31])
 
-    assert scaled_context.value("taumax") == 19 / 2 / 7 / 5 * 23 * 29 * 31
+    np.testing.assert_almost_equal(scaled_context.value("taumax"), 19 / 2 / 7 / 5 * 23 * 29 * 31)
 
     print("context scaling ok")
 
