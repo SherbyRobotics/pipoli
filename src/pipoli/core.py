@@ -221,11 +221,14 @@ class Context:
             )
     
     def __str__(self):
-        dimensions = dict(zip(self.symbols, self.dimensions))
-        return f"Context({self.base_dimensions}, {self.symbols}, {self.dimensions}, {self.values})"
+        quantities = ",\n    ".join((f"{s} = {v} {d}" for s, d, v in zip(self.symbols, self.dimensions, self.values)))
+        return f"Context(\n    {self.base_dimensions},\n    {quantities}\n)"
 
     def __repr__(self):
         return str(self)
+    
+    def __iter__(self):
+        return zip(self.symbols, self.dimensions, self.values)
 
     def _index_of(self, symbol):
         index = bisect_left(self.symbols, symbol)
