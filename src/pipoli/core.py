@@ -60,6 +60,80 @@ class Dimension:
         return Dimension(self.powers * power)
 
 
+class Transform:
+    """Represents the tranformation to go to the adimensional space and back."""
+
+    def __init__(self, dims: list[Dimension], base_dims: list[Dimension]):
+        self._assert_all_same_number_of_base_dimension(dims, base_dims)
+
+        self.dims = dims
+        self.base_dims = base_dims
+        
+        B = np.vstack([bd.powers for bd in base_dims]).T
+
+        self._assert_base_dims_span_all_dimension_space(B)
+
+        Binv = np.linalg.inv(B)
+        dims_mat = np.vstack([dim.powers for dim in dims]).T
+
+        # the powers that simplifies the input dimensions with the base dimensions
+        self.mi = -Binv @ dims_mat
+
+    
+    @staticmethod
+    def _assert_all_same_number_of_base_dimension(dims, base_dims):
+        if len(dims) < 1:
+            raise ValueError("`dims` must be non empty")
+
+        nb_base_dim = dims[0].powers.size
+        for dim in dims:
+            if dim.powers.size != nb_base_dim:
+                raise ValueError("all the dimensions in `dims` must have the same number of base dimension")
+        
+        for dim in base_dims:
+            if dim.powers.size != nb_base_dim:
+                raise ValueError("all the dimensions in `base_dims` must have the same number of base dimension")
+    
+    @staticmethod
+    def _assert_base_dims_span_all_dimension_space(B):
+        if np.linalg.matrix_rank(B) != B.shape[0]:
+            raise ValueError("the base dimensions must span the dimension space")
+    
+    def _compute_factors(self, base_values: np.ndarray) -> float:
+        b = base_values.reshape(base_values.size, 1)
+        factors = np.prod(b**self.mi, axis=0)
+        
+        return factors
+
+    def to_adim(self, nat: np.ndarray, base: np.ndarray) -> np.ndarray:
+        factors = self._compute_factors(base)
+        return factors * nat
+
+    def from_adim(self, adim: np.ndarray, base: np.ndarray) -> np.ndarray:
+        factors = self._compute_factors(base)
+        return adim / factors
+
+    def make_to_adim(self, base: np.ndarray) -> np.ndarray:
+        factors = self._compute_factors(base)
+
+        def to_adim(nat):
+            return nat * factors
+        
+        return to_adim
+
+    def make_from_adim(self, base: np.ndarray) -> np.ndarray:
+        factors = self._compute_factors(base)
+
+        def from_adim(adim):
+            return adim / factors
+        
+        return from_adim
+
+    def translate_to(self, transform: "Transform"):
+        raise NotImplementedError("todo maybe")
+        return ...
+
+
 class Context:
     """Represents the context of a system.
     
@@ -103,7 +177,7 @@ class Context:
         """
         self._assert_well_formed(symbols, dimensions, values)
         
-        # reorder the symbols
+        # sort the symbols for faster indexing
         all_sorted = zip(
             *sorted(
                 zip(symbols, dimensions, values),
@@ -130,12 +204,12 @@ class Context:
 
         if len(dimensions) != len(symbols):
             raise ValueError(
-                f"the number of dimensions ({len(dimensions)}) doesn't match the number of symbols ({len(symbols)})"
+                f"the number of dimensions ({len(dimensions)}) must match the number of symbols ({len(symbols)})"
             )
         
         if len(values) != len(symbols):
             raise ValueError(
-                f"the number of values ({len(values)}) doesn't match the number of symbols ({len(symbols)})"
+                f"the number of values ({len(values)}) must match the number of symbols ({len(symbols)})"
             )
     
     def __str__(self):
@@ -144,18 +218,18 @@ class Context:
 
     def __repr__(self):
         return str(self)
+
+    def _index_of(self, symbol):
+        index = bisect_left(self.symbols, symbol)
+        if self.symbols[index] != symbol:
+            raise KeyError(f"symbol '{symbol}' not in context")
+        return index
     
     def value(self, symbol):
-        index = bisect_left(self.symbols, symbol)
-        if self.symbols[index] != symbol:
-            raise KeyError(f"symbol '{symbol}' not in context")
-        return self.values[index]
+        return self.values[self._index_of(symbol)]
     
     def dimension(self, symbol):
-        index = bisect_left(self.symbols, symbol)
-        if self.symbols[index] != symbol:
-            raise KeyError(f"symbol '{symbol}' not in context")
-        return self.dimensions[index]
+        return self.dimensions[self._index_of(symbol)]
 
     @staticmethod
     def _compute_factor(dimension: Dimension, Binv: np.ndarray, values: np.ndarray) -> float:
@@ -169,7 +243,7 @@ class Context:
         B = np.vstack(dims_base).T
 
         if np.linalg.matrix_rank(B) != len(self.base_dimensions):
-            return ValueError("the base doesn't span the dimension space")
+            raise ValueError("the base doesn't span the dimension space")
 
         return np.linalg.inv(B)
 
@@ -185,23 +259,13 @@ class Context:
         if not all(b in self.symbols for b in base):
             raise ValueError(f"all symbols in `base` ({base}) must be in the context ({self.symbols})")
         
-        values = np.array([self.value(b) for b in base])
+        base_values = np.array([self.value(b) for b in base])
+        base_dims = [self.dimension(b) for b in base]
 
-        Binv = self._compute_Binv(base)
+        transform = Transform(dimensions, base_dims)
 
-        factors = np.zeros(len(dimensions))
-        for i, dim in enumerate(dimensions):
-
-            if len(dim.powers) != len(self.base_dimensions):
-                raise ValueError(f"the number of component of the dimension should be the same as the number of base dimensions")
-
-            factors[i] = self._compute_factor(dim, Binv, values)
-
-        def to_adim(x: np.ndarray) -> np.ndarray:
-            return x * factors
-
-        def from_adim(x: np.ndarray) -> np.ndarray:
-            return x / factors
+        to_adim = transform.make_to_adim(base_values)
+        from_adim = transform.make_from_adim(base_values)
 
         return to_adim, from_adim
     
@@ -249,6 +313,13 @@ class Context:
         self._assert_compatible(other)
 
         return np.linalg.norm(self.values - other.values)
+    
+    def sample_around(self, scale_min, scale_max) -> "Context":
+        scale = np.random.uniform(scale_min, scale_max)
+        values = self.values * scale
+
+        return Context(self.base_dimensions, self.symbols, self.dimensions, values)
+
 
 class Policy(ABC):
     """A generic policy interface."""
@@ -358,6 +429,16 @@ if __name__ == "__main__":
 
     dim_tau = M * L**2 * 1/T**2
 
+    print("dimension operations ok")
+
+    transform = Transform([dim_tau], [M, L/T**2, L])
+    base_values = np.array([2, 7, 3])
+
+    assert transform.to_adim(np.array([1]), base_values) == np.array([1/42])
+    assert transform.from_adim(np.array([1]), base_values) == np.array([42])
+
+    print("transform ok")
+
     context = Context(
         [M, L, T],
         *zip(
@@ -427,14 +508,14 @@ if __name__ == "__main__":
     try:
         scaled_context.value("not in context")
     except KeyError as e:
-        assert str(e) == "symbol 'not in context' not in context"
+        assert str(e) == '"symbol \'not in context\' not in context"'
 
         print("context wrong symbol value ok")
     
     try:
         scaled_context.dimension("not in context")
     except KeyError as e:
-        assert str(e) == "symbol 'not in context' not in context"
+        assert str(e) == '"symbol \'not in context\' not in context"'
 
         print("context wrong symbol dimension ok")
 
