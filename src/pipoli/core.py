@@ -242,6 +242,15 @@ class Context:
     def dimension(self, symbol):
         return self.dimensions[self._index_of(symbol)]
     
+    def change(self, *quantities: tuple[str, float]) -> "Context":
+        new_values = self.values.copy()
+
+        for symbol, value in quantities:
+            i = self._index_of(symbol)
+            new_values[i] = value
+        
+        return Context(self.base_dimensions, self.symbols, self.dimensions, new_values)
+    
     def _assert_base_in_symbols(self, base):
         if not all(b in self.symbols for b in base):
             raise ValueError(f"all symbols in `base` ({base}) must be in the context ({self.symbols})")
@@ -314,9 +323,9 @@ class Context:
     
     def sample_around(self, scale_min, scale_max) -> "Context":
         scale = np.random.uniform(scale_min, scale_max)
-        values = self.values * scale
+        new_values = self.values * scale
 
-        return Context(self.base_dimensions, self.symbols, self.dimensions, values)
+        return Context(self.base_dimensions, self.symbols, self.dimensions, new_values)
 
 
 class Policy(ABC):
