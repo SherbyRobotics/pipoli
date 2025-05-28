@@ -308,7 +308,7 @@ class Context:
 
         return self.values @ other.values / np.linalg.norm(self.values) / np.linalg.norm(other.values)
     
-    def adimensional_distance(self, other: "Context", base: list[str]) -> float:
+    def adimensional_difference(self, other: "Context", base: list[str]) -> np.ndarray:
         self._assert_compatible(other)
 
         self_to_adim, _ = self.make_transforms(self.dimensions, base)
@@ -317,7 +317,10 @@ class Context:
         self_adim_values = self_to_adim(self.values)
         other_adim_values = other_to_adim(other.values)
 
-        return np.linalg.norm(self_adim_values - other_adim_values)
+        return self_adim_values - other_adim_values
+
+    def adimensional_distance(self, other: "Context", base: list[str]) -> float:
+        return np.linalg.norm(self.adimensional_difference(other, base))
 
     def euclidian_distance(self, other: "Context") -> float:
         self._assert_compatible(other)
