@@ -222,7 +222,7 @@ class Context:
     
     def __str__(self):
         quantities = ",\n    ".join((f"{s} = {v} {d}" for s, d, v in zip(self.symbols, self.dimensions, self.values)))
-        return f"Context(\n    {self.base_dimensions},\n    {quantities}\n)"
+        return f"Context(\n    {self.base_dimensions}\n\n    {quantities}\n)"
 
     def __repr__(self):
         return str(self)
