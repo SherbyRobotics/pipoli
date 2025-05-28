@@ -34,6 +34,21 @@ class Dimension:
     def __repr__(self):
         return str(self)
     
+    def __eq__(self, other: "Dimension") -> bool:
+        if not isinstance(other, Dimension):
+            return NotImplemented
+        
+        if not self.is_compatible(other):
+            raise ValueError("other dimension must have the same number of componenents")
+
+        return np.allclose(self.powers, other.powers)
+    
+    def __ne__(self, other):
+        return not (self == other)
+    
+    def is_compatible(self, other: "Dimension") -> bool:
+        return self.powers.size == other.powers.size
+    
     def __mul__(self, other: Union["Dimension", float, np.ndarray]) -> "Dimension":
         if isinstance(other, Dimension):
             return Dimension(self.powers + other.powers)
