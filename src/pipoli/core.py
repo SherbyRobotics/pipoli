@@ -229,6 +229,9 @@ class Context:
     
     def __iter__(self):
         return zip(self.symbols, self.dimensions, self.values)
+    
+    def __len__(self):
+        return len(self.symbols)
 
     def _index_of(self, symbol):
         index = bisect_left(self.symbols, symbol)
