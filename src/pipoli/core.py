@@ -74,6 +74,87 @@ class Dimension:
     def __pow__(self, power: Union[float, np.ndarray]) -> "Dimension":
         return Dimension(self.powers * power)
 
+    def __ror__(self, x: float) -> "Quantity":
+        # enables syntax q = 42 | M * L / T
+        if not isinstance(x, (float, int)):
+            return NotImplemented
+
+        return Quantity(x, self)
+
+class Quantity:
+
+    def __init__(self, value, dimension):
+        self.value = value
+        self.dimension = dimension
+
+    def __float__(self):
+        return float(self.value)
+    
+    def __int__(self):
+        return int(self.value)
+    
+    def __str__(self):
+        return f"Quantity({self.value}, {self.dimension})"
+    
+    def __repr__(self):
+        return str(self)
+    
+    def _assert_compatible_dimension(self, other):
+        if not self.dimension.is_compatible(other.dimension):
+            raise ValueError("dimension should be compatible")
+    
+    def _assert_same_dimension(self, other):
+        if self.dimension != other.dimension:
+            raise ValueError("dimension of 'other' should be the same")
+    
+    def __add__(self, other: "Quantity") -> "Quantity":
+        if not isinstance(other, (Quantity)):
+            return NotImplemented
+
+        self._assert_same_dimension(other)
+
+        return Quantity(self.value + other.value, self.dimension)
+    
+    def __sub__(self, other: "Quantity") -> "Quantity":
+        if not isinstance(other, (Quantity)):
+            return NotImplemented
+        
+        self._assert_same_dimension(other)
+
+        return Quantity(self.value - other.value, self.dimension)
+    
+    def __mul__(self, other: Union[float, "Quantity"]) -> "Quantity":
+        if not isinstance(other, (float, int, Quantity)):
+            return NotImplemented
+        
+        self._assert_compatible_dimension(other)
+
+        return Quantity(self.value * other.value, self.dimension * other.dimension)
+    
+    def __rmul__(self, other: float) -> "Quantity":
+        if isinstance(other, (float, int)):
+            return Quantity(self.value * other, self.dimension)
+        else:
+            return NotImplemented
+    
+    def __truediv__(self, other: Union[float, "Quantity"]) -> "Quantity":
+        if not isinstance(other, (float, int, Quantity)):
+            return NotImplemented
+        
+        self._assert_compatible_dimension(other)
+
+        return Quantity(self.value / other.value, self.dimension / other.dimension)
+    
+    def __rtruediv__(self, other: float) -> "Quantity":
+        if isinstance(other, (float, int)):
+            return Quantity(other / self.value, 1 / self.dimension)
+        else:
+            return NotImplemented
+    
+    def __neg__(self):
+        return Quantity(-self.value, self.dimension)
+    
+
 
 class Transform:
     """Represents the tranformation to go to the adimensional space and back."""
@@ -458,6 +539,45 @@ if __name__ == "__main__":
     dim_tau = M * L**2 * 1/T**2
 
     print("dimension operations ok")
+
+    q1 = Quantity(5, M)
+    q2 = 7 | L
+
+    try:
+        q1 + q2
+    except ValueError as e:
+        assert str(e) == "dimension of 'other' should be the same"
+    
+    try:
+        q1 - q2
+    except ValueError as e:
+        assert str(e) == "dimension of 'other' should be the same"
+
+    q3 = q1 * q2
+    assert q3.value == 5 * 7
+    assert q3.dimension == M * L
+
+    q4 = 2 * q3
+    assert q4.value == 2 * 5 * 7
+    assert q4.dimension == M * L
+
+    q5 = 3 / q4
+    assert q5.value == 3 / (2 * 5 * 7)
+    assert q5.dimension == 1 / (M * L)
+
+    q6 = q3 + q4
+    assert q6.value == (5 * 7) + (2 * 5 * 7)
+    assert q6.dimension == M * L
+
+    q7 = -q5
+    assert q7.value == -3 / (2 * 5 * 7)
+    assert q7.dimension == 1 / (M * L)
+
+    q8 = q7 - 1 / q6
+    assert q8.value == ( -3 / (2 * 5 * 7)) - 1 / ((5 * 7) + (2 * 5 * 7))
+    assert q8.dimension == 1 / (M * L)
+
+    print("quantity operations ok")
 
     transform = Transform([dim_tau], [M, L/T**2, L])
     base_values = np.array([2, 7, 3])
