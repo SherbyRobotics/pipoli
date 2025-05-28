@@ -245,10 +245,10 @@ class Context:
     def dimension(self, symbol):
         return self.dimensions[self._index_of(symbol)]
     
-    def change(self, *quantities: tuple[str, float]) -> "Context":
+    def change(self, **quantities: float) -> "Context":
         new_values = self.values.copy()
 
-        for symbol, value in quantities:
+        for symbol, value in quantities.items():
             i = self._index_of(symbol)
             new_values[i] = value
         
