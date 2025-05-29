@@ -252,7 +252,6 @@ class Context:
     Example:
     --------
     >>> context = Context(
-    ...     base_dimension,
     ...     *zip(
     ...         ("sym1", D, 42),
     ...         ("sym2", D, 37),
@@ -261,7 +260,6 @@ class Context:
     """
 
     def __init__(self,
-        base_dimensions: list[Dimension],
         symbols: list[str],
         dimensions: list[Dimension],
         values: list[float]
@@ -270,8 +268,6 @@ class Context:
 
         Parameters:
         -----------
-        base_dimensions: list[Dimension]
-            the base dimensions of the units of the system
         symbols: list[str]
             the symbols of the quantities of the system
         dimensions: list[Dimension]
@@ -294,7 +290,6 @@ class Context:
         values = np.array(next(all_sorted))
 
         # formal definition of a Context
-        self.base_dimensions = base_dimensions
         self.symbols = symbols
         self.dimensions = dimensions
         self.values = values
@@ -318,7 +313,7 @@ class Context:
     
     def __str__(self):
         quantities = ",\n    ".join((f"{s} = {v} {d}" for s, d, v in zip(self.symbols, self.dimensions, self.values)))
-        return f"Context(\n    {self.base_dimensions}\n\n    {quantities}\n)"
+        return f"Context(\n    {quantities}\n)"
 
     def __repr__(self):
         return str(self)
@@ -348,7 +343,7 @@ class Context:
             i = self._index_of(symbol)
             new_values[i] = value
         
-        return Context(self.base_dimensions, self.symbols, self.dimensions, new_values)
+        return Context(self.symbols, self.dimensions, new_values)
     
     def _assert_base_in_symbols(self, base):
         if not all(b in self.symbols for b in base):
@@ -388,7 +383,7 @@ class Context:
         new_base_values = np.array(values)
         new_values = transform.from_adim(adim_values, new_base_values)
 
-        return Context(self.base_dimensions, self.symbols, self.dimensions, new_values)
+        return Context(self.symbols, self.dimensions, new_values)
 
     def _assert_compatible(self, other):
         same_symbols = self.symbols == other.symbols
@@ -427,7 +422,7 @@ class Context:
         scale = np.random.uniform(scale_min, scale_max)
         new_values = self.values * scale
 
-        return Context(self.base_dimensions, self.symbols, self.dimensions, new_values)
+        return Context(self.symbols, self.dimensions, new_values)
 
 
 class Policy(ABC):
@@ -588,7 +583,6 @@ if __name__ == "__main__":
     print("transform ok")
 
     context = Context(
-        [M, L, T],
         *zip(
             ("m", M, 2),
             ("g", L/T**2, 7),
@@ -619,7 +613,6 @@ if __name__ == "__main__":
     import copy
 
     new_context = Context(
-        [M, L, T],
         *zip(
             ("m", M, 2),
             ("g", L/T**2, 7),

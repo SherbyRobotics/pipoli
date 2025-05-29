@@ -157,7 +157,6 @@ T = Dimension([0, 0, 1])
 Unit = Dimension([0, 0, 0])
 
 context1 = Context(
-    [M, L, T],
     *zip(
         ("m", M, m),
         ("g", L/T**2, g),
@@ -185,7 +184,6 @@ l2 = 1
 taumax2 = 100
 
 context2 = Context(
-    [M, L, T],
     *zip(
         ("m", M, m2),
         ("g", L/T**2, g),
