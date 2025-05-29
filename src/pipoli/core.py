@@ -294,6 +294,25 @@ class Context:
         self.dimensions = dimensions
         self.values = values
     
+    @classmethod
+    def from_quantities(cls, **quantities: Quantity) -> "Dimension":
+        """Create a context from quantities as keyword arguments.
+        
+        A more ergonomic and fancy way of creating a context!
+
+        Example:
+        --------
+        >>> context = Context.from_quantities(
+        ...     sym1 = 42 | D,
+        ...     sym2 = 37 | D**2,
+        ... )
+        """
+        symbols = tuple(quantities.keys())
+        dimensions = tuple(map(lambda q: q.dimension, quantities.values()))
+        values = tuple(map(lambda q: q.value, quantities.values()))
+
+        return cls(symbols, dimensions, values)
+    
     @staticmethod
     def _assert_well_formed(symbols, dimensions, values):
         symbols_set = set(symbols)
@@ -596,6 +615,14 @@ if __name__ == "__main__":
 
     assert to_adim(1) == 1/42
     assert to_dim(1) == 42
+
+    # such fancy, much legible
+    Context.from_quantities(
+        m = 2 | M,
+        g = 7 | L / T**2,
+        l = 3 | L,
+        taumax = 19 | M * L**2 / T**2,
+    )
 
     print("dimension and context ok")
 
