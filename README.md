@@ -1,8 +1,5 @@
 # pipoli
 
-[![PyPI - Version](https://img.shields.io/pypi/v/pipoli.svg)](https://pypi.org/project/pipoli)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pipoli.svg)](https://pypi.org/project/pipoli)
-
 -----
 
 **Table of Contents**
@@ -13,7 +10,7 @@
 ## Installation
 
 ```console
-pip install pipoli
+pip install git+https://github.com/SherbyRobotics/pipoli
 ```
 
 ## License
