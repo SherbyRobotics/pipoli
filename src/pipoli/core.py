@@ -108,7 +108,7 @@ class Quantity:
             raise ValueError("dimension of 'other' should be the same")
     
     def __add__(self, other: "Quantity") -> "Quantity":
-        if not isinstance(other, (Quantity)):
+        if not isinstance(other, Quantity):
             return NotImplemented
 
         self._assert_same_dimension(other)
@@ -116,7 +116,7 @@ class Quantity:
         return Quantity(self.value + other.value, self.dimension)
     
     def __sub__(self, other: "Quantity") -> "Quantity":
-        if not isinstance(other, (Quantity)):
+        if not isinstance(other, Quantity):
             return NotImplemented
         
         self._assert_same_dimension(other)
@@ -124,12 +124,15 @@ class Quantity:
         return Quantity(self.value - other.value, self.dimension)
     
     def __mul__(self, other: Union[float, "Quantity"]) -> "Quantity":
-        if not isinstance(other, (float, int, Quantity)):
-            return NotImplemented
+        if isinstance(other, (int, float)):
+            return Quantity(self.value * other, self.dimension)
         
-        self._assert_compatible_dimension(other)
-
-        return Quantity(self.value * other.value, self.dimension * other.dimension)
+        elif isinstance(other, Quantity):
+            self._assert_compatible_dimension(other)
+            return Quantity(self.value * other.value, self.dimension * other.dimension)
+        
+        else:
+            return NotImplemented
     
     def __rmul__(self, other: float) -> "Quantity":
         if isinstance(other, (float, int)):
@@ -138,12 +141,15 @@ class Quantity:
             return NotImplemented
     
     def __truediv__(self, other: Union[float, "Quantity"]) -> "Quantity":
-        if not isinstance(other, (float, int, Quantity)):
-            return NotImplemented
+        if isinstance(other, (int, float)):
+            return Quantity(self.value / other, self.dimension)
         
-        self._assert_compatible_dimension(other)
-
-        return Quantity(self.value / other.value, self.dimension / other.dimension)
+        elif isinstance(other, Quantity):
+            self._assert_compatible_dimension(other)
+            return Quantity(self.value / other.value, self.dimension / other.dimension)
+        
+        else:
+            return NotImplemented
     
     def __rtruediv__(self, other: float) -> "Quantity":
         if isinstance(other, (float, int)):
@@ -566,30 +572,48 @@ if __name__ == "__main__":
         q1 - q2
     except ValueError as e:
         assert str(e) == "dimension of 'other' should be the same"
+    
+    try:
+        q1 + 2
+    except TypeError:
+        pass
 
-    q3 = q1 * q2
-    assert q3.value == 5 * 7
-    assert q3.dimension == M * L
+    try:
+        q2 - 1.0
+    except TypeError:
+        pass
 
-    q4 = 2 * q3
-    assert q4.value == 2 * 5 * 7
-    assert q4.dimension == M * L
+    q3 = q1 * 2
+    assert q3.value == 2 * 5
+    assert q3.dimension == M
 
-    q5 = 3 / q4
-    assert q5.value == 3 / (2 * 5 * 7)
-    assert q5.dimension == 1 / (M * L)
+    q4 = q2 / 3
+    assert q4.value == 7 / 3
+    assert q4.dimension == L
 
-    q6 = q3 + q4
-    assert q6.value == (5 * 7) + (2 * 5 * 7)
+    q5 = q1 * q2
+    assert q5.value == 5 * 7
+    assert q5.dimension == M * L
+
+    q6 = 2 * q5
+    assert q6.value == 2 * 5 * 7
     assert q6.dimension == M * L
 
-    q7 = -q5
-    assert q7.value == -3 / (2 * 5 * 7)
+    q7 = 3 / q6
+    assert q7.value == 3 / (2 * 5 * 7)
     assert q7.dimension == 1 / (M * L)
 
-    q8 = q7 - 1 / q6
-    assert q8.value == ( -3 / (2 * 5 * 7)) - 1 / ((5 * 7) + (2 * 5 * 7))
-    assert q8.dimension == 1 / (M * L)
+    q8 = q5 + q6
+    assert q8.value == (5 * 7) + (2 * 5 * 7)
+    assert q8.dimension == M * L
+
+    q9 = -q7
+    assert q9.value == -3 / (2 * 5 * 7)
+    assert q9.dimension == 1 / (M * L)
+
+    q10 = q9 - 1 / q8
+    assert q10.value == ( -3 / (2 * 5 * 7)) - 1 / ((5 * 7) + (2 * 5 * 7))
+    assert q10.dimension == 1 / (M * L)
 
     print("quantity operations ok")
 
