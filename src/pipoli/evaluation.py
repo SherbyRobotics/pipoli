@@ -59,6 +59,33 @@ def linsweep_change_contexts(
     return [original_context.change(**dict(zip(symbols, values))) for values in product(*ranges)]
 
 
+def scale_sweep_volume_bounds(
+    context: Context,
+    sweep_desc: dict[str, tuple[float, float, int]]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Returns the lowest and the highest values each quantity of the `context` will hav with this `sweep_desc`.
+    
+    The symbols in the `sweep_desc` must be a base in the `context`.
+    
+    Use this function to easily compute the bounds to be passed to `Context.sample_around()`.
+    **Note** `Context.sample_around()` expects the bounds to be factors.
+    The bounds computed here should therefore be divided by `context.values`.
+    """
+    base = tuple(sweep_desc.keys())
+    desc_up, desc_lo, _ = [*zip(sweep_desc.values())]
+
+    context_up = context.scaled_to(base, desc_up).values
+    context_lo = context.scaled_to(base, desc_lo).values
+
+    to_switch = context_up < context_lo
+    to_lo = context_up[to_switch]
+    to_up = context_lo[to_switch]
+
+    context_up[to_switch] = to_up
+    context_lo[to_switch] = to_lo
+
+    return context_lo, context_up
+
 def record_episode(
     policy: Policy,
     env: Env,
