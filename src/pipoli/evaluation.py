@@ -1,3 +1,5 @@
+"""Usefull functions used to evaluate a policy."""
+
 from itertools import product
 
 import numpy as np
