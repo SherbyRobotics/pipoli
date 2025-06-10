@@ -74,8 +74,8 @@ def scale_sweep_volume_bounds(
     base = tuple(sweep_desc.keys())
     desc_up, desc_lo, _ = [*zip(sweep_desc.values())]
 
-    context_up = context.scaled_to(base, desc_up).values
-    context_lo = context.scaled_to(base, desc_lo).values
+    context_up = context.scale_to(base, desc_up).values
+    context_lo = context.scale_to(base, desc_lo).values
 
     to_switch = context_up < context_lo
     to_lo = context_up[to_switch]
