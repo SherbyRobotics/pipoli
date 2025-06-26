@@ -51,14 +51,16 @@ class Context:
         np.save(path + '.npy', self.base_vars)
 
     def compare(self, other: "Context") -> bool:
-        return np.linalg.norm(self.base_vars - other.base_vars)
+        a = self.base_vars - other.base_vars
+        b = np.linalg.norm(a)
+        out = np.linalg.norm(self.base_vars - other.base_vars) #* np.sign(other.base_vars[0] - self.base_vars[0])
+        return out
     
     def adim_compare(self, other: "Context") -> bool:
-        # return the angle between the two vectors
-        # return np.arccos(np.dot(self.base_vars, other.base_vars) / (np.linalg.norm(self.base_vars) * np.linalg.norm(other.base_vars)))
-        norm_self = self.base_vars / np.linalg.norm(self.base_vars)
-        norm_other = other.base_vars / np.linalg.norm(other.base_vars)
-        return np.linalg.norm(norm_self - norm_other)
+        # norm_self = self.base_vars / np.linalg.norm(self.base_vars)
+        # norm_other = other.base_vars / np.linalg.norm(other.base_vars)
+        # return np.linalg.norm(norm_self - norm_other) * np.sign(other.base_vars[0] - self.base_vars[0])
+        return self.base_vars[2]/(self.base_vars[0]*self.base_vars[1]) - other.base_vars[2]/(other.base_vars[0]*other.base_vars[1])
 
 
 Policy = A2C | DDPG | PPO | SAC | TD3 | VI
@@ -118,7 +120,8 @@ class DimensionalPolicy:
         """
         obs = self.context.to_adim_obs(obs_s)
         act, state = self.predict(obs, *args, **kwargs)
-        act_s = self.context.from_adim_act(act)
+        # act_s = self.context.from_adim_act(act)
+        return act, state
         return act_s, state
 
     def to_scaled(self, context: Context) -> "ScaledPolicy":
