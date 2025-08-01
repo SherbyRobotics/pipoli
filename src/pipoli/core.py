@@ -348,12 +348,21 @@ class Context:
     
     def __len__(self):
         return len(self.symbols)
+    
+    def __sub__(self, other):
+        if isinstance(other, Context):
+            return self.difference(other)
+        else:
+            return NotImplemented
 
     def _index_of(self, symbol):
         index = bisect_left(self.symbols, symbol)
         if self.symbols[index] != symbol:
             raise KeyError(f"symbol '{symbol}' not in context")
         return index
+    
+    def _indices_of(self, symbols):
+        return [self._index_of(s) for s in sorted(symbols)]    
     
     def value(self, symbol):
         return self.values[self._index_of(symbol)]
@@ -369,6 +378,15 @@ class Context:
             new_values[i] = value
         
         return Context(self.symbols, self.dimensions, new_values)
+    
+    def subcontext(self, symbols: list[str]) -> "Context":
+        indices = self._indices_of(symbols)
+
+        syms = [self.symbols[i] for i in indices]
+        dims = [self.dimensions[i] for i in indices]
+        vals = [self.values[i] for i in indices]
+    
+        return Context(syms, dims, vals)
     
     def _assert_base_in_symbols(self, base):
         if not all(b in self.symbols for b in base):
@@ -394,6 +412,13 @@ class Context:
         from_adim = transform.make_from_adim(base_values)
 
         return to_adim, from_adim
+    
+    def adimensionalize(self, base: list[str]) -> "Context":
+        to_adim, _ = self.make_transforms(self.dimensions, base)
+        values = to_adim(self.values)
+        dimensions = [self.dimensions[0]**0] * len(self)
+
+        return Context(self.symbols, dimensions, values)
 
     def scale_to(self, base: list[str], values: list[float]) -> "Context":
         """Returns a new context with its values scaled to `values` according to the `base`."""
@@ -413,10 +438,9 @@ class Context:
     def _assert_compatible(self, other):
         same_symbols = self.symbols == other.symbols
         # TODO complete checks
-        same_base_dimensions = ...
         sames_dimensions = ...
 
-        if not (same_symbols and same_base_dimensions and sames_dimensions):
+        if not (same_symbols and sames_dimensions):
             raise ValueError(f"contexts {self} and {other} are incompatible")
 
     def cosine_similarity(self, other: "Context") -> float:
@@ -434,14 +458,16 @@ class Context:
         other_adim_values = other_to_adim(other.values)
 
         return self_adim_values - other_adim_values
+    
+    def difference(self, other: "Context") -> np.ndarray:
+        self._assert_compatible(other)
+        return self.values - other.values
 
     def adimensional_distance(self, other: "Context", base: list[str]) -> float:
         return np.linalg.norm(self.adimensional_difference(other, base))
 
     def euclidian_distance(self, other: "Context") -> float:
-        self._assert_compatible(other)
-
-        return np.linalg.norm(self.values - other.values)
+        return np.linalg.norm(self.difference(other, base))
     
     def sample_around(self, scale_min, scale_max) -> "Context":
         scale = np.random.uniform(scale_min, scale_max)
@@ -647,6 +673,19 @@ if __name__ == "__main__":
         l = 3 | L,
         taumax = 19 | M * L**2 / T**2,
     )
+
+    sub_context = context.subcontext(["m", "l", "taumax"])
+
+    assert sub_context.symbols == ("l", "m", "taumax")
+    assert sub_context.dimensions == (L, M, M*L**2/T**2)
+    assert  all(sub_context.values == np.array([3, 2, 19]))
+
+    adim_context = context.adimensionalize(basis)
+
+    np.testing.assert_almost_equal(adim_context.values, np.array([1., 1., 1., 19 / 2 / 7 / 3]))
+
+    difference = context.change(taumax=23) - context
+    np.testing.assert_array_almost_equal(difference, np.array([0, 0, 0, 4]))
 
     print("dimension and context ok")
 
