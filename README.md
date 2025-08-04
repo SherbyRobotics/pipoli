@@ -9,7 +9,7 @@
 
 ## Installation
 
-```console
+```sh
 pip install git+https://github.com/SherbyRobotics/pipoli
 ```
 

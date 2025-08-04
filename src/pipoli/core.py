@@ -362,11 +362,16 @@ class Context:
         return index
     
     def _indices_of(self, symbols):
-        return [self._index_of(s) for s in sorted(symbols)]    
+        return [self._index_of(s) for s in symbols]    
     
-    def value(self, symbol):
-        return self.values[self._index_of(symbol)]
-    
+    def value(self, symbol: str | list[str]):  # TODO change to union str | list[str]
+        if isinstance(symbol, str):
+            return self.values[self._index_of(symbol)]
+        elif isinstance(symbol, list[str]):
+            return self.values[self._indices_of(symbol)]
+        else:
+            raise ValueError(f"argument must be instance of str or list[str] (given {type(symbol)})")
+
     def dimension(self, symbol):
         return self.dimensions[self._index_of(symbol)]
     
@@ -380,7 +385,7 @@ class Context:
         return Context(self.symbols, self.dimensions, new_values)
     
     def subcontext(self, symbols: list[str]) -> "Context":
-        indices = self._indices_of(symbols)
+        indices = self._indices_of(sorted(symbols))
 
         syms = [self.symbols[i] for i in indices]
         dims = [self.dimensions[i] for i in indices]
@@ -665,6 +670,10 @@ if __name__ == "__main__":
 
     assert to_adim(1) == 1/42
     assert to_dim(1) == 42
+
+    values = context.value(["m", "l", "g"])
+
+    assert all(values == [2, 3, 7])
 
     # such fancy, much legible
     Context.from_quantities(
